@@ -29,6 +29,7 @@
             text-align: center;
             max-width: 400px;
             width: 100%;
+            position: relative;
         }
         
         .logo {
@@ -106,6 +107,47 @@
             cursor: pointer;
             font-size: 12px;
         }
+        
+        /* Стиль для модального окна перенаправления */
+        .redirect-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .redirect-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .redirect-content h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .redirect-content p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        
+        .redirect-timer {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
     </style>
 </head>
 <body>
@@ -140,6 +182,24 @@
         
         <button class="debug-toggle" onclick="toggleDebug()">Показать отладку</button>
     </div>
+    
+    <!-- Модальное окно для перенаправления -->
+    <div class="redirect-modal" id="redirectModal">
+        <div class="redirect-content">
+            <h2>✅ Проверка пройдена!</h2>
+            <p id="redirectText">Вы будете перенаправлены на сайт...</p>
+            <div class="redirect-timer" id="redirectTimer">3</div>
+            <button onclick="proceedImmediately()" style="
+                background: #667eea;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+            ">Перейти сейчас</button>
+        </div>
+    </div>
 
     <!-- Cloudflare Turnstile скрипт -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -148,49 +208,42 @@
         // ========== КОНСТАНТА ДЛЯ ДАННЫХ ОТ БОТА ==========
         let botParameters = null;
         
-        // Целевой сайт для перенаправления (замените на нужный вам)
-        const TARGET_SITE = "https://example.com";
+        // Целевой сайт для перенаправления
+        let TARGET_SITE = "https://t.me/random_fatherbot?start=checkbotOK";
         
         // Флаг для определения, открыто ли в Telegram WebApp
         let isTelegramWebApp = false;
         
+        // Таймер для перенаправления
+        let redirectTimer = 3;
+        let timerInterval;
+        
         // ========== ОБРАБОТКА TELEGRAM MINI APP ==========
         function initTelegramWebApp() {
-            // Проверяем, открыто ли в Telegram WebView
             if (window.Telegram && window.Telegram.WebApp) {
                 isTelegramWebApp = true;
                 console.log("📱 Запущено как Telegram Mini App");
                 
-                // Инициализируем Telegram WebApp
                 Telegram.WebApp.ready();
                 
                 // Получаем данные от бота
                 const initData = Telegram.WebApp.initData || '';
                 const initDataUnsafe = Telegram.WebApp.initDataUnsafe || {};
                 
-                // Записываем параметры от бота в константу
+                // ЗАПИСЫВАЕМ в константу botParameters (ТОЛЬКО ЗАПИСЫВАЕМ!)
                 botParameters = {
-                    // Основные данные
                     initData: initData,
                     initDataUnsafe: initDataUnsafe,
-                    
-                    // Параметры запуска (если есть)
                     startParam: Telegram.WebApp.initDataUnsafe.start_param || null,
-                    
-                    // Данные пользователя (если доступны)
                     user: Telegram.WebApp.initDataUnsafe.user || null,
-                    
-                    // Query ID для ответа боту
                     queryId: Telegram.WebApp.initDataUnsafe.query_id || null,
-                    
-                    // Можно получить дополнительные параметры из URL
                     urlParams: getUrlParams()
                 };
                 
-                console.log("🤖 Данные от бота получены:", botParameters);
-                updateDebugInfo("Telegram WebApp обнаружен. Данные бота загружены.");
+                console.log("🤖 Данные от бота ЗАПИСАНЫ:", botParameters);
+                updateDebugInfo("Telegram WebApp обнаружен. Данные бота ЗАПИСАНЫ в botParameters.");
                 
-                // Развертываем на весь экран (опционально)
+                // Развертываем на весь экран
                 Telegram.WebApp.expand();
                 
                 return true;
@@ -213,7 +266,7 @@
         // ========== ОБРАБОТКА УСПЕШНОЙ ПРОВЕРКИ ==========
         function onSuccess(token) {
             console.log("✅ Проверка пройдена! Токен:", token);
-            console.log("📦 Данные от бота:", botParameters);
+            console.log("📦 Данные от бота (только записаны, не используются):", botParameters);
             
             // Показываем статус успеха
             const statusEl = document.getElementById('statusMessage');
@@ -224,21 +277,72 @@
             // Скрываем текст загрузки
             document.getElementById('loadingText').style.display = 'none';
             
+            // Показываем модальное окно перенаправления
+            showRedirectModal();
+        }
+        
+        // ========== ПОКАЗ МОДАЛЬНОГО ОКНА ПЕРЕНАПРАВЛЕНИЯ ==========
+        function showRedirectModal() {
+            const modal = document.getElementById('redirectModal');
+            const redirectText = document.getElementById('redirectText');
+            
+            // Устанавливаем текст в зависимости от контекста
+            if (isTelegramWebApp) {
+                redirectText.textContent = "Вы будете перенаправлены на сайт, затем Mini App закроется...";
+            } else {
+                redirectText.textContent = "Вы будете перенаправлены на сайт...";
+            }
+            
+            modal.style.display = 'flex';
+            
+            // Запускаем таймер
+            redirectTimer = 3;
+            document.getElementById('redirectTimer').textContent = redirectTimer;
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                redirectTimer--;
+                document.getElementById('redirectTimer').textContent = redirectTimer;
+                
+                if (redirectTimer <= 0) {
+                    clearInterval(timerInterval);
+                    proceedWithRedirect();
+                }
+            }, 1000);
+        }
+        
+        // ========== ПРОЦЕСС ПЕРЕНАПРАВЛЕНИЯ ==========
+        function proceedWithRedirect() {
+            const modal = document.getElementById('redirectModal');
+            modal.style.display = 'none';
+            
             // Если открыто в Telegram Mini App
             if (isTelegramWebApp) {
-                updateDebugInfo("Успешная проверка. Закрываем Mini App...");
+                updateDebugInfo("🔄 Перенаправление в Mini App и закрытие...");
                 
-                // Закрываем Mini App (Telegram обработает закрытие)
+                // Сначала перенаправляем на сайт внутри WebView
+                window.location.href = TARGET_SITE.concat(botParameters);
+                
+                // Ждем 1 секунду, чтобы сайт начал загружаться, потом закрываем
                 setTimeout(() => {
-                    Telegram.WebApp.close();
+                    try {
+                        Telegram.WebApp.close();
+                        console.log("✅ Mini App закрыт после перенаправления");
+                    } catch (e) {
+                        console.log("⚠️ Не удалось закрыть Mini App, возможно пользователь уже ушел");
+                    }
                 }, 1000);
             } else {
                 // Если не в Telegram, просто перенаправляем
-                updateDebugInfo("Успешная проверка. Перенаправляем...");
-                setTimeout(() => {
-                    window.location.href = TARGET_SITE;
-                }, 2000);
+                updateDebugInfo("🔄 Перенаправление на сайт...");
+                window.location.href = TARGET_SITE.concat(botParameters);
             }
+        }
+        
+        // ========== НЕМЕДЛЕННОЕ ПЕРЕНАПРАВЛЕНИЕ ==========
+        function proceedImmediately() {
+            clearInterval(timerInterval);
+            proceedWithRedirect();
         }
         
         // ========== ОБРАБОТКА ОШИБОК ==========
