@@ -1,7 +1,308 @@
-<DOCTYPE HTML>
+<!DOCTYPE html>
+<html lang="ru">
 <head>
-<title>Проверка на бота</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка безопасности</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .logo {
+            margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .logo p {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        
+        .widget-container {
+            margin: 30px 0;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .loading {
+            color: #666;
+            font-size: 16px;
+            margin: 20px 0;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .debug-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            text-align: left;
+            font-size: 12px;
+            color: #666;
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .debug-info h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .debug-toggle {
+            margin-top: 15px;
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 12px;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <div class="logo">
+            <h1>🔒 Проверка безопасности</h1>
+            <p>Пожалуйста, подтвердите, что вы человек, чтобы продолжить</p>
+        </div>
+        
+        <div class="widget-container">
+            <!-- Виджет Cloudflare Turnstile -->
+            <div class="cf-turnstile" 
+                 data-sitekey="0x4AAAAAACTpGWvnnCRoq2HM"
+                 data-callback="onSuccess"
+                 data-error-callback="onError"
+                 data-expired-callback="onExpired"
+                 data-theme="light"
+                 data-size="normal">
+            </div>
+        </div>
+        
+        <div class="loading" id="loadingText">
+            Загрузка проверки...
+        </div>
+        
+        <div class="status" id="statusMessage"></div>
+        
+        <div class="debug-info" id="debugInfo">
+            <h3>Отладочная информация:</h3>
+            <div id="debugContent"></div>
+        </div>
+        
+        <button class="debug-toggle" onclick="toggleDebug()">Показать отладку</button>
+    </div>
+
+    <!-- Cloudflare Turnstile скрипт -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    
+    <script>
+        // ========== КОНСТАНТА ДЛЯ ДАННЫХ ОТ БОТА ==========
+        let botParameters = null;
+        
+        // Целевой сайт для перенаправления (замените на нужный вам)
+        const TARGET_SITE = "https://example.com";
+        
+        // Флаг для определения, открыто ли в Telegram WebApp
+        let isTelegramWebApp = false;
+        
+        // ========== ОБРАБОТКА TELEGRAM MINI APP ==========
+        function initTelegramWebApp() {
+            // Проверяем, открыто ли в Telegram WebView
+            if (window.Telegram && window.Telegram.WebApp) {
+                isTelegramWebApp = true;
+                console.log("📱 Запущено как Telegram Mini App");
+                
+                // Инициализируем Telegram WebApp
+                Telegram.WebApp.ready();
+                
+                // Получаем данные от бота
+                const initData = Telegram.WebApp.initData || '';
+                const initDataUnsafe = Telegram.WebApp.initDataUnsafe || {};
+                
+                // Записываем параметры от бота в константу
+                botParameters = {
+                    // Основные данные
+                    initData: initData,
+                    initDataUnsafe: initDataUnsafe,
+                    
+                    // Параметры запуска (если есть)
+                    startParam: Telegram.WebApp.initDataUnsafe.start_param || null,
+                    
+                    // Данные пользователя (если доступны)
+                    user: Telegram.WebApp.initDataUnsafe.user || null,
+                    
+                    // Query ID для ответа боту
+                    queryId: Telegram.WebApp.initDataUnsafe.query_id || null,
+                    
+                    // Можно получить дополнительные параметры из URL
+                    urlParams: getUrlParams()
+                };
+                
+                console.log("🤖 Данные от бота получены:", botParameters);
+                updateDebugInfo("Telegram WebApp обнаружен. Данные бота загружены.");
+                
+                // Развертываем на весь экран (опционально)
+                Telegram.WebApp.expand();
+                
+                return true;
+            }
+            return false;
+        }
+        
+        // ========== ПОЛУЧЕНИЕ ПАРАМЕТРОВ ИЗ URL ==========
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            const result = {};
+            
+            for (const [key, value] of params.entries()) {
+                result[key] = value;
+            }
+            
+            return result;
+        }
+        
+        // ========== ОБРАБОТКА УСПЕШНОЙ ПРОВЕРКИ ==========
+        function onSuccess(token) {
+            console.log("✅ Проверка пройдена! Токен:", token);
+            console.log("📦 Данные от бота:", botParameters);
+            
+            // Показываем статус успеха
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = "✓ Проверка пройдена успешно!";
+            statusEl.className = "status success";
+            statusEl.style.display = 'block';
+            
+            // Скрываем текст загрузки
+            document.getElementById('loadingText').style.display = 'none';
+            
+            // Если открыто в Telegram Mini App
+            if (isTelegramWebApp) {
+                updateDebugInfo("Успешная проверка. Закрываем Mini App...");
+                
+                // Закрываем Mini App (Telegram обработает закрытие)
+                setTimeout(() => {
+                    Telegram.WebApp.close();
+                }, 1000);
+            } else {
+                // Если не в Telegram, просто перенаправляем
+                updateDebugInfo("Успешная проверка. Перенаправляем...");
+                setTimeout(() => {
+                    window.location.href = TARGET_SITE;
+                }, 2000);
+            }
+        }
+        
+        // ========== ОБРАБОТКА ОШИБОК ==========
+        function onError() {
+            console.error("❌ Ошибка при проверке");
+            
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = "✗ Произошла ошибка при проверке. Пожалуйста, обновите страницу и попробуйте снова.";
+            statusEl.className = "status error";
+            statusEl.style.display = 'block';
+            
+            document.getElementById('loadingText').style.display = 'none';
+            updateDebugInfo("Ошибка проверки Cloudflare Turnstile");
+        }
+        
+        function onExpired() {
+            console.warn("⚠️ Токен истек");
+            
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = "Время проверки истекло. Пожалуйста, выполните проверку снова.";
+            statusEl.className = "status error";
+            statusEl.style.display = 'block';
+            
+            updateDebugInfo("Токен проверки истек");
+        }
+        
+        // ========== ОТЛАДОЧНАЯ ИНФОРМАЦИЯ ==========
+        function updateDebugInfo(message) {
+            const debugContent = document.getElementById('debugContent');
+            const timestamp = new Date().toLocaleTimeString();
+            debugContent.innerHTML += `<div><strong>[${timestamp}]</strong> ${message}</div>`;
+        }
+        
+        function toggleDebug() {
+            const debugInfo = document.getElementById('debugInfo');
+            debugInfo.style.display = debugInfo.style.display === 'block' ? 'none' : 'block';
+        }
+        
+        // ========== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            // Проверяем Telegram WebApp
+            if (!initTelegramWebApp()) {
+                updateDebugInfo("Запущено как обычная веб-страница");
+            }
+            
+            // Отслеживаем загрузку виджета
+            let widgetLoaded = false;
+            
+            function checkWidgetLoaded() {
+                const widget = document.querySelector('.cf-turnstile iframe');
+                if (widget && !widgetLoaded) {
+                    widgetLoaded = true;
+                    document.getElementById('loadingText').textContent = "Проверка загружена. Пройдите проверку...";
+                    updateDebugInfo("Виджет Cloudflare загружен");
+                }
+            }
+            
+            setInterval(checkWidgetLoaded, 500);
+            
+            // Добавляем информацию о botParameters в отладку
+            if (botParameters) {
+                updateDebugInfo("Bot Parameters: " + JSON.stringify(botParameters, null, 2));
+            }
+        });
+    </script>
 </body>
-<html>
+</html>
