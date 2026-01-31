@@ -208,8 +208,8 @@
         // ========== КОНСТАНТА ДЛЯ ДАННЫХ ОТ БОТА ==========
         let botParameters = null;
         
-        // Целевой сайт для перенаправления
-        let TARGET_SITE = "https://t.me/random_fatherbot?start=checkbotOK";
+        // Базовый домен для перенаправления
+        const BASE_TARGET_SITE = "https://t.me/random_fatherbot";
         
         // Флаг для определения, открыто ли в Telegram WebApp
         let isTelegramWebApp = false;
@@ -263,10 +263,27 @@
             return result;
         }
         
+        // ========== ФОРМИРОВАНИЕ КОНЕЧНОГО URL С START ПАРАМЕТРОМ ==========
+        function getFinalRedirectUrl() {
+            // Если есть startParam от бота, используем его
+            let startParam = "checkbotOK"; // значение по умолчанию
+            
+            if (botParameters && botParameters.startParam) {
+                startParam = botParameters.startParam;
+            }
+            
+            // Формируем финальный URL
+            const finalUrl = `${BASE_TARGET_SITE}?start=${encodeURIComponent(startParam)}`;
+            console.log("🔗 Финальный URL для редиректа:", finalUrl);
+            updateDebugInfo(`Финальный URL: ${finalUrl}`);
+            
+            return finalUrl;
+        }
+        
         // ========== ОБРАБОТКА УСПЕШНОЙ ПРОВЕРКИ ==========
         function onSuccess(token) {
             console.log("✅ Проверка пройдена! Токен:", token);
-            console.log("📦 Данные от бота (только записаны, не используются):", botParameters);
+            console.log("📦 Данные от бота (только записаны):", botParameters);
             
             // Показываем статус успеха
             const statusEl = document.getElementById('statusMessage');
@@ -288,9 +305,9 @@
             
             // Устанавливаем текст в зависимости от контекста
             if (isTelegramWebApp) {
-                redirectText.textContent = "Вы будете перенаправлены на сайт, затем Mini App закроется...";
+                redirectText.textContent = "Вы будете перенаправлены на бота, затем Mini App закроется...";
             } else {
-                redirectText.textContent = "Вы будете перенаправлены на сайт...";
+                redirectText.textContent = "Вы будете перенаправлены на бота...";
             }
             
             modal.style.display = 'flex';
@@ -316,14 +333,16 @@
             const modal = document.getElementById('redirectModal');
             modal.style.display = 'none';
             
-            // Если открыто в Telegram Mini App
+            // Получаем финальный URL с start параметром
+            const finalUrl = getFinalRedirectUrl();
+            updateDebugInfo(`🔄 Перенаправление на: ${finalUrl}`);
+            
+            // Перенаправляем на финальный URL
+            window.location.href = finalUrl;
+            
+            // Если открыто в Telegram Mini App, закрываем его после перенаправления
             if (isTelegramWebApp) {
-                updateDebugInfo("🔄 Перенаправление в Mini App и закрытие...");
-                
-                // Сначала перенаправляем на сайт внутри WebView
-                window.location.href = TARGET_SITE.concat(botParameters);
-                
-                // Ждем 1 секунду, чтобы сайт начал загружаться, потом закрываем
+                // Ждем 1 секунду, чтобы бот начал загружаться, потом закрываем
                 setTimeout(() => {
                     try {
                         Telegram.WebApp.close();
@@ -332,10 +351,6 @@
                         console.log("⚠️ Не удалось закрыть Mini App, возможно пользователь уже ушел");
                     }
                 }, 1000);
-            } else {
-                // Если не в Telegram, просто перенаправляем
-                updateDebugInfo("🔄 Перенаправление на сайт...");
-                window.location.href = TARGET_SITE.concat(botParameters);
             }
         }
         
