@@ -148,6 +148,15 @@
             color: #667eea;
             margin: 20px 0;
         }
+        
+        .close-message {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f4ff;
+            border-radius: 10px;
+            color: #0066cc;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -175,6 +184,10 @@
         
         <div class="status" id="statusMessage"></div>
         
+        <div class="close-message" id="closeMessage">
+            ✅ Проверка успешно пройдена! Вы можете закрыть эту страницу.
+        </div>
+        
         <div class="debug-info" id="debugInfo">
             <h3>Отладочная информация:</h3>
             <div id="debugContent"></div>
@@ -187,7 +200,7 @@
     <div class="redirect-modal" id="redirectModal">
         <div class="redirect-content">
             <h2>✅ Проверка пройдена!</h2>
-            <p id="redirectText">Вы будете перенаправлены на сайт...</p>
+            <p id="redirectText">Вы будете перенаправлены на бота...</p>
             <div class="redirect-timer" id="redirectTimer">3</div>
             <button onclick="proceedImmediately()" style="
                 background: #667eea;
@@ -263,17 +276,42 @@
             return result;
         }
         
-        // ========== ФОРМИРОВАНИЕ КОНЕЧНОГО URL С START ПАРАМЕТРОМ ==========
-        function getFinalRedirectUrl() {
-            // Если есть startParam от бота, используем его
-            let startParam = "checkbotOK"; // значение по умолчанию
+        // ========== ПОЛУЧЕНИЕ ПАРАМЕТРА ИЗ URL ==========
+        function getStartParamFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const param = params.get('param');
             
-            if (botParameters && botParameters.startParam) {
-                startParam = botParameters.startParam;
+            if (param) {
+                console.log("📥 Параметр из URL:", param);
+                updateDebugInfo(`Параметр из URL: ${param}`);
+                return param;
             }
             
+            // Если параметра нет, проверяем startParam из Telegram
+            if (botParameters && botParameters.startParam) {
+                console.log("📥 Параметр из startParam:", botParameters.startParam);
+                updateDebugInfo(`Параметр из startParam: ${botParameters.startParam}`);
+                return botParameters.startParam;
+            }
+            
+            // Если ничего нет, используем пустую строку
+            console.log("📥 Параметр не найден, используем пустую строку");
+            updateDebugInfo("Параметр не найден, используем пустую строку");
+            return "";
+        }
+        
+        // ========== ФОРМИРОВАНИЕ КОНЕЧНОГО URL ==========
+        function getFinalRedirectUrl() {
+            const startParam = getStartParamFromUrl();
+            
             // Формируем финальный URL
-            const finalUrl = `${BASE_TARGET_SITE}?start=${encodeURIComponent(startParam)}`;
+            let finalUrl = BASE_TARGET_SITE;
+            if (startParam) {
+                finalUrl = `${BASE_TARGET_SITE}?start=${encodeURIComponent(startParam)}`;
+            } else {
+                finalUrl = BASE_TARGET_SITE; // Без параметра start
+            }
+            
             console.log("🔗 Финальный URL для редиректа:", finalUrl);
             updateDebugInfo(`Финальный URL: ${finalUrl}`);
             
@@ -304,6 +342,7 @@
             const redirectText = document.getElementById('redirectText');
             
             // Устанавливаем текст в зависимости от контекста
+            const finalUrl = getFinalRedirectUrl();
             if (isTelegramWebApp) {
                 redirectText.textContent = "Вы будете перенаправлены на бота, затем Mini App закроется...";
             } else {
@@ -333,7 +372,7 @@
             const modal = document.getElementById('redirectModal');
             modal.style.display = 'none';
             
-            // Получаем финальный URL с start параметром
+            // Получаем финальный URL
             const finalUrl = getFinalRedirectUrl();
             updateDebugInfo(`🔄 Перенаправление на: ${finalUrl}`);
             
@@ -352,6 +391,11 @@
                     }
                 }, 1000);
             }
+            
+            // Показываем сообщение о том, что можно закрыть страницу
+            setTimeout(() => {
+                document.getElementById('closeMessage').style.display = 'block';
+            }, 2000);
         }
         
         // ========== НЕМЕДЛЕННОЕ ПЕРЕНАПРАВЛЕНИЕ ==========
@@ -424,4 +468,4 @@
         });
     </script>
 </body>
-</html>
+    </html>
