@@ -108,7 +108,6 @@
             font-size: 12px;
         }
         
-        /* Стиль для модального окна перенаправления */
         .redirect-modal {
             position: fixed;
             top: 0;
@@ -148,15 +147,6 @@
             color: #667eea;
             margin: 20px 0;
         }
-        
-        .close-message {
-            margin-top: 20px;
-            padding: 15px;
-            background: #e8f4ff;
-            border-radius: 10px;
-            color: #0066cc;
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -183,10 +173,6 @@
         </div>
         
         <div class="status" id="statusMessage"></div>
-        
-        <div class="close-message" id="closeMessage">
-            ✅ Проверка успешно пройдена! Вы можете закрыть эту страницу.
-        </div>
         
         <div class="debug-info" id="debugInfo">
             <h3>Отладочная информация:</h3>
@@ -238,25 +224,6 @@
                 console.log("📱 Запущено как Telegram Mini App");
                 
                 Telegram.WebApp.ready();
-                
-                // Получаем данные от бота
-                const initData = Telegram.WebApp.initData || '';
-                const initDataUnsafe = Telegram.WebApp.initDataUnsafe || {};
-                
-                // ЗАПИСЫВАЕМ в константу botParameters (ТОЛЬКО ЗАПИСЫВАЕМ!)
-                botParameters = {
-                    initData: initData,
-                    initDataUnsafe: initDataUnsafe,
-                    startParam: Telegram.WebApp.initDataUnsafe.start_param || null,
-                    user: Telegram.WebApp.initDataUnsafe.user || null,
-                    queryId: Telegram.WebApp.initDataUnsafe.query_id || null,
-                    urlParams: getUrlParams()
-                };
-                
-                console.log("🤖 Данные от бота ЗАПИСАНЫ:", botParameters);
-                updateDebugInfo("Telegram WebApp обнаружен. Данные бота ЗАПИСАНЫ в botParameters.");
-                
-                // Развертываем на весь экран
                 Telegram.WebApp.expand();
                 
                 return true;
@@ -264,54 +231,33 @@
             return false;
         }
         
-        // ========== ПОЛУЧЕНИЕ ПАРАМЕТРОВ ИЗ URL ==========
-        function getUrlParams() {
-            const params = new URLSearchParams(window.location.search);
-            const result = {};
-            
-            for (const [key, value] of params.entries()) {
-                result[key] = value;
-            }
-            
-            return result;
-        }
-        
         // ========== ПОЛУЧЕНИЕ ПАРАМЕТРА ИЗ URL ==========
-        function getStartParamFromUrl() {
-            const params = new URLSearchParams(window.location.search);
-            const param = params.get('param');
+        function getBotParametersFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const parameterValue = urlParams.get('parameter');
             
-            if (param) {
-                console.log("📥 Параметр из URL:", param);
-                updateDebugInfo(`Параметр из URL: ${param}`);
-                return param;
+            if (parameterValue) {
+                // ЗАПИСЫВАЕМ параметр в botParameters (ТОЛЬКО ЗАПИСЫВАЕМ!)
+                botParameters = parameterValue;
+                console.log("🤖 Параметр из URL ЗАПИСАН в botParameters:", botParameters);
+                updateDebugInfo(`Параметр из URL ЗАПИСАН в botParameters: ${botParameters}`);
+            } else {
+                console.log("⚠️ Параметр 'parameter' не найден в URL");
+                updateDebugInfo("Параметр 'parameter' не найден в URL");
             }
-            
-            // Если параметра нет, проверяем startParam из Telegram
-            if (botParameters && botParameters.startParam) {
-                console.log("📥 Параметр из startParam:", botParameters.startParam);
-                updateDebugInfo(`Параметр из startParam: ${botParameters.startParam}`);
-                return botParameters.startParam;
-            }
-            
-            // Если ничего нет, используем пустую строку
-            console.log("📥 Параметр не найден, используем пустую строку");
-            updateDebugInfo("Параметр не найден, используем пустую строку");
-            return "";
         }
         
         // ========== ФОРМИРОВАНИЕ КОНЕЧНОГО URL ==========
         function getFinalRedirectUrl() {
-            const startParam = getStartParamFromUrl();
+            // Если есть botParameters, используем его как start параметр
+            let startParam = "checkbotOK"; // значение по умолчанию
             
-            // Формируем финальный URL
-            let finalUrl = BASE_TARGET_SITE;
-            if (startParam) {
-                finalUrl = `${BASE_TARGET_SITE}?start=${encodeURIComponent(startParam)}`;
-            } else {
-                finalUrl = BASE_TARGET_SITE; // Без параметра start
+            if (botParameters) {
+                startParam = botParameters;
             }
             
+            // Формируем финальный URL
+            const finalUrl = `${BASE_TARGET_SITE}?start=${encodeURIComponent(startParam)}`;
             console.log("🔗 Финальный URL для редиректа:", finalUrl);
             updateDebugInfo(`Финальный URL: ${finalUrl}`);
             
@@ -342,7 +288,6 @@
             const redirectText = document.getElementById('redirectText');
             
             // Устанавливаем текст в зависимости от контекста
-            const finalUrl = getFinalRedirectUrl();
             if (isTelegramWebApp) {
                 redirectText.textContent = "Вы будете перенаправлены на бота, затем Mini App закроется...";
             } else {
@@ -372,7 +317,7 @@
             const modal = document.getElementById('redirectModal');
             modal.style.display = 'none';
             
-            // Получаем финальный URL
+            // Получаем финальный URL с start параметром
             const finalUrl = getFinalRedirectUrl();
             updateDebugInfo(`🔄 Перенаправление на: ${finalUrl}`);
             
@@ -391,11 +336,6 @@
                     }
                 }, 1000);
             }
-            
-            // Показываем сообщение о том, что можно закрыть страницу
-            setTimeout(() => {
-                document.getElementById('closeMessage').style.display = 'block';
-            }, 2000);
         }
         
         // ========== НЕМЕДЛЕННОЕ ПЕРЕНАПРАВЛЕНИЕ ==========
@@ -442,6 +382,9 @@
         
         // ========== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ==========
         document.addEventListener('DOMContentLoaded', function() {
+            // Сначала получаем параметр из URL
+            getBotParametersFromUrl();
+            
             // Проверяем Telegram WebApp
             if (!initTelegramWebApp()) {
                 updateDebugInfo("Запущено как обычная веб-страница");
@@ -460,12 +403,7 @@
             }
             
             setInterval(checkWidgetLoaded, 500);
-            
-            // Добавляем информацию о botParameters в отладку
-            if (botParameters) {
-                updateDebugInfo("Bot Parameters: " + JSON.stringify(botParameters, null, 2));
-            }
         });
     </script>
 </body>
-    </html>
+</html>
